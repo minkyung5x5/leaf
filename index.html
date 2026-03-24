@@ -6,284 +6,251 @@
     <title>나뭇잎 하나 — 2026. 3. 24</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #F5F1EB;
-            overflow: hidden;
-            height: 100vh;
-            cursor: none;
-        }
+        body { background: #F5F1EB; overflow: hidden; height: 100vh; cursor: none; }
         canvas { display: block; }
-        .date {
-            position: fixed; top: 28px; left: 32px;
-            font-family: Georgia, serif; font-size: 13px;
-            color: #C0B8AC; pointer-events: none;
-        }
-        .hint {
-            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-            font-family: Georgia, serif; font-size: 11px;
-            color: #C8C0B4; pointer-events: none;
-            opacity: 1; transition: opacity 3s;
-        }
-        .dot {
-            position: fixed; width: 5px; height: 5px;
-            background: rgba(60,50,40,0.3); border-radius: 50%;
-            pointer-events: none; z-index: 99;
-            transform: translate(-50%,-50%);
-        }
+        .ui { position: fixed; pointer-events: none; z-index: 9; }
+        .date { top: 28px; left: 32px; font: 13px Georgia, serif; color: #C0B8AC; }
+        .hint { bottom: 24px; left: 50%; transform: translateX(-50%); font: 11px Georgia, serif; color: #C8C0B4; transition: opacity 3s; }
+        .dot { width: 5px; height: 5px; background: rgba(60,50,40,0.25); border-radius: 50%; transform: translate(-50%,-50%); z-index: 99; }
     </style>
 </head>
 <body>
-    <div class="date">2026. 3. 24</div>
-    <div class="hint" id="hint">빛을 움직여보세요</div>
-    <div class="dot" id="dot"></div>
+    <div class="ui date">2026. 3. 24</div>
+    <div class="ui hint" id="hint">빛을 움직여보세요</div>
+    <div class="ui dot" id="dot" style="position:fixed"></div>
     <canvas id="c"></canvas>
 <script>
 {
     const C = document.getElementById('c');
     const X = C.getContext('2d');
-    const dot = document.getElementById('dot');
-    const hint = document.getElementById('hint');
-
     let W, H;
     function resize() { W = C.width = innerWidth; H = C.height = innerHeight; }
     resize();
     addEventListener('resize', resize);
 
-    let mx = W * 0.65, my = H * 0.3;
     let lx = 0.5, ly = -0.3, tlx = 0.5, tly = -0.3;
     let hinted = false;
+    const dot = document.getElementById('dot');
+    const hint = document.getElementById('hint');
 
     addEventListener('mousemove', e => {
-        mx = e.clientX; my = e.clientY;
-        dot.style.left = mx + 'px'; dot.style.top = my + 'px';
-        tlx = (mx - W/2) / (W/2);
-        tly = (my - H/2) / (H/2);
+        dot.style.left = e.clientX + 'px'; dot.style.top = e.clientY + 'px';
+        tlx = (e.clientX - W/2) / (W/2);
+        tly = (e.clientY - H/2) / (H/2);
         if (!hinted) { hinted = true; hint.style.opacity = '0'; }
     });
     addEventListener('touchmove', e => {
-        mx = e.touches[0].clientX; my = e.touches[0].clientY;
-        tlx = (mx - W/2) / (W/2);
-        tly = (my - H/2) / (H/2);
+        tlx = (e.touches[0].clientX - W/2) / (W/2);
+        tly = (e.touches[0].clientY - H/2) / (H/2);
         if (!hinted) { hinted = true; hint.style.opacity = '0'; }
     }, { passive: true });
 
     // ─── 종이 텍스처 ───
-    const paper = document.createElement('canvas');
-    paper.width = paper.height = 512;
-    {
-        const c = paper.getContext('2d');
-        c.fillStyle = '#F5F1EB';
-        c.fillRect(0, 0, 512, 512);
+    const paper = (() => {
+        const o = document.createElement('canvas'); o.width = o.height = 512;
+        const c = o.getContext('2d');
+        c.fillStyle = '#F5F1EB'; c.fillRect(0, 0, 512, 512);
         const d = c.getImageData(0, 0, 512, 512);
         for (let i = 0; i < d.data.length; i += 4) {
             const n = (Math.random() - 0.5) * 10;
             d.data[i] += n; d.data[i+1] += n; d.data[i+2] += n - 2;
         }
         c.putImageData(d, 0, 0);
-    }
+        return o;
+    })();
 
-    // ─── 잎 형태 ───
-    // 원본: 넓은 하트형, 줄기가 오른쪽 위, 끝이 아래로 뾰족
-    // 약간 왼쪽으로 기울어진 비대칭
+    // ─── 연필 해칭 레이어 ───
+    function mkHatch(w, h, n, ang, aMin, aMax, wMin, wMax) {
+        const o = document.createElement('canvas'); o.width = w; o.height = h;
+        const c = o.getContext('2d'); c.lineCap = 'round';
+        const cs = Math.cos(ang), sn = Math.sin(ang);
+        for (let i = 0; i < n; i++) {
+            const x = Math.random() * w, y = Math.random() * h;
+            const l = 3 + Math.random() * 20;
+            const wb = (Math.random() - 0.5) * 0.18;
+            c.beginPath(); c.moveTo(x, y);
+            c.lineTo(x + (cs + wb) * l, y + (sn + wb) * l);
+            c.strokeStyle = `rgba(20,16,10,${aMin + Math.random() * (aMax - aMin)})`;
+            c.lineWidth = wMin + Math.random() * (wMax - wMin);
+            c.stroke();
+        }
+        return o;
+    }
+    const H1 = mkHatch(500, 500, 5000, -0.5,  0.02, 0.08, 0.3, 1.2);
+    const H2 = mkHatch(500, 500, 3000, 0.5,   0.015, 0.06, 0.2, 0.8);
+    const H3 = mkHatch(500, 500, 2000, -1.2,  0.01, 0.04, 0.2, 0.6);
+
+    // ─── 잎 윤곽 ───
+    // 원본 방향: 줄기=오른쪽위, 끝=왼쪽아래
+    // 전체를 약 -0.4rad(≈-23도) 기울여서 그림
+    const TILT = -0.4;
+
     function leafShape(s) {
         X.beginPath();
-        // 줄기 접합점 (상단 중앙 약간 오른쪽)
-        X.moveTo(s * 8, -s * 115);
-
-        // 오른쪽 상단 로브 (넓고 둥글게)
-        X.bezierCurveTo(
-            s * 65,  -s * 132,
-            s * 125, -s * 80,
-            s * 118, -s * 10
-        );
-        // 오른쪽 중단 → 하단
-        X.bezierCurveTo(
-            s * 112, s * 50,
-            s * 68,  s * 105,
-            s * 15,  s * 138
-        );
-        // 끝점 (뾰족하게)
-        X.bezierCurveTo(
-            s * 2, s * 148,
-            -s * 8, s * 148,
-            -s * 15, s * 140
-        );
-        // 왼쪽 하단 → 중단
-        X.bezierCurveTo(
-            -s * 62, s * 108,
-            -s * 118, s * 50,
-            -s * 125, -s * 5
-        );
-        // 왼쪽 상단 로브
-        X.bezierCurveTo(
-            -s * 130, -s * 75,
-            -s * 78,  -s * 132,
-            -s * 12,  -s * 117
-        );
-        // 줄기로 복귀
-        X.bezierCurveTo(
-            -s * 2, -s * 116,
-            s * 3,  -s * 116,
-            s * 8,  -s * 115
-        );
+        // 줄기 접합점
+        X.moveTo(s * 8, -s * 118);
+        // 오른쪽 로브 (넓고 풍성하게)
+        X.bezierCurveTo(s * 68, -s * 138, s * 130, -s * 82, s * 122, -s * 8);
+        // 오른쪽 중하단
+        X.bezierCurveTo(s * 115, s * 55, s * 70, s * 110, s * 18, s * 140);
+        // 끝점 (뾰족)
+        X.bezierCurveTo(s * 4, s * 152, -s * 6, s * 152, -s * 16, s * 142);
+        // 왼쪽 하단~중단
+        X.bezierCurveTo(-s * 60, s * 112, -s * 120, s * 52, -s * 128, -s * 2);
+        // 왼쪽 로브
+        X.bezierCurveTo(-s * 132, -s * 78, -s * 80, -s * 138, -s * 14, -s * 120);
+        // 닫기
+        X.bezierCurveTo(-s * 3, -s * 119, s * 3, -s * 119, s * 8, -s * 118);
         X.closePath();
     }
 
-    // ─── 연필 스트로크 레이어 생성 (오프스크린) ───
-    // 실제 연필처럼 사선 방향 스트로크를 수천 개 깔아서 톤을 만듦
-    function buildPencilLayer(w, h, density, angle, minA, maxA, minW, maxW) {
-        const off = document.createElement('canvas');
-        off.width = w; off.height = h;
-        const c = off.getContext('2d');
-        c.lineCap = 'round';
-        const cos = Math.cos(angle), sin = Math.sin(angle);
-        for (let i = 0; i < density; i++) {
-            const sx = Math.random() * w;
-            const sy = Math.random() * h;
-            const len = 4 + Math.random() * 18;
-            c.beginPath();
-            c.moveTo(sx, sy);
-            // 약간의 떨림
-            const wobble = (Math.random() - 0.5) * 0.15;
-            c.lineTo(
-                sx + (cos + wobble) * len,
-                sy + (sin + wobble) * len
-            );
-            c.strokeStyle = `rgba(25,20,15,${minA + Math.random() * (maxA - minA)})`;
-            c.lineWidth = minW + Math.random() * (maxW - minW);
-            c.stroke();
-        }
-        return off;
-    }
+    // ─── 잎맥 ───
+    // 원본 특징: 측맥이 잎끝(tip) 방향으로 부드럽게 곡선
+    // 잎맥 사이에 볼록한 면 형성
+    function drawVeins(s, ld) {
+        const midBr = 0.55 + Math.abs(ld) * 0.2;
 
-    // 여러 각도의 해칭 레이어
-    const hatch1 = buildPencilLayer(500, 500, 4000, -0.6,  0.02, 0.07, 0.3, 1.0);
-    const hatch2 = buildPencilLayer(500, 500, 2500, -0.6 + Math.PI/3, 0.015, 0.05, 0.2, 0.7);
-    const hatch3 = buildPencilLayer(500, 500, 1500, -0.6 + Math.PI/2, 0.01, 0.04, 0.2, 0.5);
-
-    // ─── 잎맥 그리기 ───
-    function drawVeins(s, lightDir) {
-        // 중심맥 — 줄기에서 끝까지 약간 곡선으로
+        // ── 중심맥 ──
         // 어두운 홈
         X.beginPath();
-        X.moveTo(s * 5, -s * 112);
-        X.bezierCurveTo(s * 4, -s * 40, -s * 1, s * 50, -s * 4, s * 143);
-        X.strokeStyle = `rgba(35,30,22,${0.3 + Math.abs(lightDir) * 0.1})`;
-        X.lineWidth = s * 3.5;
-        X.lineCap = 'round';
-        X.stroke();
-
-        // 중심맥 밝은 능선 (빛 방향쪽)
+        X.moveTo(s * 5, -s * 115);
+        X.bezierCurveTo(s * 3, -s * 50, -s * 2, s * 40, -s * 8, s * 146);
+        X.strokeStyle = `rgba(30,25,18,${0.35 + Math.abs(ld) * 0.1})`;
+        X.lineWidth = s * 4; X.lineCap = 'round'; X.stroke();
+        // 밝은 능선
         X.beginPath();
-        X.moveTo(s * 6 + lightDir * s * 1.5, -s * 111);
-        X.bezierCurveTo(
-            s * 5 + lightDir * s * 1.5, -s * 38,
-            lightDir * s * 1.5, s * 52,
-            -s * 3 + lightDir * s * 1, s * 141
-        );
-        X.strokeStyle = `rgba(215,205,190,${0.5 + Math.abs(lightDir) * 0.25})`;
-        X.lineWidth = s * 1.8;
-        X.stroke();
+        X.moveTo(s * 6 + ld * s * 2, -s * 114);
+        X.bezierCurveTo(s * 4 + ld * s * 2, -s * 48, ld * s * 2, s * 42, -s * 7 + ld * s, s * 145);
+        X.strokeStyle = `rgba(220,210,195,${midBr})`;
+        X.lineWidth = s * 2; X.stroke();
 
-        // 측맥
+        // ── 측맥 ──
+        // t: 중심맥 위의 위치 (0=줄기, 1=끝)
+        // rA/lA: 오른쪽/왼쪽 맥 출발 각도
+        // rC/lC: 곡률 (끝 방향으로 휘는 정도)
+        // len: 길이 비율
         const veins = [
-            { t: 0.1,  rAng: 0.42,  lAng: -0.48, rLen: 0.45, lLen: 0.5  },
-            { t: 0.22, rAng: 0.48,  lAng: -0.52, rLen: 0.65, lLen: 0.7  },
-            { t: 0.36, rAng: 0.52,  lAng: -0.50, rLen: 0.82, lLen: 0.85 },
-            { t: 0.48, rAng: 0.55,  lAng: -0.48, rLen: 0.88, lLen: 0.9  },
-            { t: 0.58, rAng: 0.50,  lAng: -0.45, rLen: 0.78, lLen: 0.82 },
-            { t: 0.68, rAng: 0.48,  lAng: -0.42, rLen: 0.62, lLen: 0.65 },
-            { t: 0.78, rAng: 0.45,  lAng: -0.40, rLen: 0.45, lLen: 0.48 },
-            { t: 0.87, rAng: 0.40,  lAng: -0.38, rLen: 0.28, lLen: 0.30 },
+            { t:0.08, rA:0.25, lA:Math.PI-0.25, rC:0.55, lC:0.55, len:0.42 },
+            { t:0.18, rA:0.35, lA:Math.PI-0.35, rC:0.50, lC:0.50, len:0.62 },
+            { t:0.30, rA:0.42, lA:Math.PI-0.42, rC:0.45, lC:0.48, len:0.80 },
+            { t:0.42, rA:0.48, lA:Math.PI-0.48, rC:0.40, lC:0.44, len:0.90 },
+            { t:0.53, rA:0.50, lA:Math.PI-0.50, rC:0.38, lC:0.42, len:0.85 },
+            { t:0.63, rA:0.48, lA:Math.PI-0.48, rC:0.35, lC:0.38, len:0.72 },
+            { t:0.73, rA:0.45, lA:Math.PI-0.45, rC:0.30, lC:0.33, len:0.55 },
+            { t:0.82, rA:0.40, lA:Math.PI-0.40, rC:0.28, lC:0.30, len:0.38 },
+            { t:0.90, rA:0.35, lA:Math.PI-0.35, rC:0.25, lC:0.26, len:0.22 },
         ];
+
+        const tipX = -s * 8, tipY = s * 146; // 잎 끝
+        const baseLen = s * 115;
 
         for (const v of veins) {
             // 중심맥 위의 시작점
-            const sy = -s * 112 + v.t * s * 255;
-            const sx = s * 5 - v.t * s * 9;
-            const baseLen = s * 110;
+            const sy = -s * 115 + v.t * (s * 261);
+            const sx = s * 5 - v.t * s * 13;
 
             // ── 오른쪽 맥 ──
-            const rL = baseLen * v.rLen;
-            const rEx = sx + Math.cos(v.rAng) * rL;
-            const rEy = sy + Math.sin(v.rAng) * rL;
-            // 곡선의 컨트롤 포인트 (약간 위로 볼록하게)
-            const rCx = sx + Math.cos(v.rAng) * rL * 0.55 + s * 5;
-            const rCy = sy + Math.sin(v.rAng) * rL * 0.4;
+            const rL = baseLen * v.len;
+            // 끝점: 기본 방향 + 팁 방향으로 곡선
+            const rMidX = sx + Math.cos(v.rA) * rL * 0.55;
+            const rMidY = sy + Math.sin(v.rA) * rL * 0.55;
+            // 끝점은 팁 방향으로 약간 꺾임
+            const rEndX = rMidX + (tipX - rMidX) * v.rC * 0.3 + Math.cos(v.rA) * rL * 0.3;
+            const rEndY = rMidY + (tipY - rMidY) * v.rC * 0.25 + Math.sin(v.rA) * rL * 0.15;
 
             // 어두운 홈
-            X.beginPath();
-            X.moveTo(sx + s * 1, sy);
-            X.quadraticCurveTo(rCx, rCy, rEx, rEy);
-            X.strokeStyle = `rgba(40,35,25,${0.15 + v.rLen * 0.12})`;
-            X.lineWidth = s * 2.2 * v.rLen;
-            X.stroke();
-            // 밝은 능선
-            X.beginPath();
-            X.moveTo(sx + s * 1.5, sy - s * 0.8);
-            X.quadraticCurveTo(rCx + s * 0.5, rCy - s * 1, rEx, rEy - s * 0.5);
-            X.strokeStyle = `rgba(210,200,185,${(0.2 + Math.max(0, lightDir) * 0.35) * v.rLen})`;
-            X.lineWidth = s * 1.0 * v.rLen;
-            X.stroke();
+            X.beginPath(); X.moveTo(sx + s, sy);
+            X.quadraticCurveTo(rMidX, rMidY, rEndX, rEndY);
+            X.strokeStyle = `rgba(35,30,20,${0.2 + v.len * 0.15})`;
+            X.lineWidth = s * 2.5 * v.len; X.lineCap = 'round'; X.stroke();
 
-            // 세맥 (잔가지)
-            if (v.rLen > 0.4) {
-                for (let k = 0.3; k < 0.85; k += 0.18 + Math.random() * 0.1) {
-                    const bx = (1-k)*(1-k)*sx + 2*(1-k)*k*rCx + k*k*rEx;
-                    const by = (1-k)*(1-k)*sy + 2*(1-k)*k*rCy + k*k*rEy;
-                    const sLen = s * 15 * v.rLen * (1 - k * 0.5);
-                    const sAng = v.rAng + 0.4 + Math.random() * 0.3;
-                    X.beginPath();
-                    X.moveTo(bx, by);
-                    X.quadraticCurveTo(
-                        bx + Math.cos(sAng) * sLen * 0.6,
-                        by + Math.sin(sAng) * sLen * 0.6,
-                        bx + Math.cos(sAng) * sLen,
-                        by + Math.sin(sAng) * sLen
-                    );
-                    X.strokeStyle = `rgba(180,170,155,${0.12 + Math.max(0, lightDir) * 0.12})`;
-                    X.lineWidth = s * 0.5;
-                    X.stroke();
+            // 밝은 능선
+            X.beginPath(); X.moveTo(sx + s * 1.5, sy - s);
+            X.quadraticCurveTo(rMidX + s * 0.5, rMidY - s * 1.2, rEndX + s * 0.3, rEndY - s * 0.5);
+            X.strokeStyle = `rgba(215,205,190,${(0.25 + Math.max(0, ld) * 0.35) * v.len})`;
+            X.lineWidth = s * 1.2 * v.len; X.stroke();
+
+            // 세맥 (잔가지) — 더 많이, 더 자연스럽게
+            if (v.len > 0.3) {
+                const nSub = Math.floor(v.len * 5);
+                for (let k = 0; k < nSub; k++) {
+                    const t = 0.2 + k * (0.65 / nSub) + (Math.random() - 0.5) * 0.05;
+                    const bx = (1-t)*(1-t)*sx + 2*(1-t)*t*rMidX + t*t*rEndX;
+                    const by = (1-t)*(1-t)*sy + 2*(1-t)*t*rMidY + t*t*rEndY;
+                    const sL = s * 18 * v.len * (1 - t * 0.6) * (0.5 + Math.random() * 0.5);
+                    // 세맥도 팁 방향으로 살짝 곡선
+                    const sA = v.rA + 0.3 + Math.random() * 0.4;
+                    const sEndX = bx + Math.cos(sA) * sL;
+                    const sEndY = by + Math.sin(sA) * sL;
+                    const sCpX = bx + Math.cos(sA) * sL * 0.6 + (tipX - bx) * 0.05;
+                    const sCpY = by + Math.sin(sA) * sL * 0.6 + (tipY - by) * 0.03;
+
+                    X.beginPath(); X.moveTo(bx, by);
+                    X.quadraticCurveTo(sCpX, sCpY, sEndX, sEndY);
+                    X.strokeStyle = `rgba(175,165,148,${(0.1 + Math.max(0, ld) * 0.15) * v.len})`;
+                    X.lineWidth = s * 0.6; X.stroke();
+
+                    // 극세맥
+                    if (Math.random() < 0.5 && v.len > 0.5) {
+                        const uL = sL * 0.4;
+                        const uA = sA + 0.3 + Math.random() * 0.3;
+                        const ut = 0.5 + Math.random() * 0.3;
+                        const ux = bx + (sEndX - bx) * ut;
+                        const uy = by + (sEndY - by) * ut;
+                        X.beginPath(); X.moveTo(ux, uy);
+                        X.lineTo(ux + Math.cos(uA) * uL, uy + Math.sin(uA) * uL);
+                        X.strokeStyle = `rgba(170,160,142,${0.06 + Math.max(0, ld) * 0.06})`;
+                        X.lineWidth = s * 0.3; X.stroke();
+                    }
                 }
             }
 
-            // ── 왼쪽 맥 ──
-            const lL = baseLen * v.lLen;
-            const lEx = sx + Math.cos(Math.PI + v.lAng) * lL;
-            const lEy = sy + Math.sin(Math.PI + v.lAng) * lL;
-            const lCx = sx + Math.cos(Math.PI + v.lAng) * lL * 0.55 - s * 5;
-            const lCy = sy + Math.sin(Math.PI + v.lAng) * lL * 0.4;
+            // ── 왼쪽 맥 (거울) ──
+            const lL = baseLen * v.len;
+            const lMidX = sx + Math.cos(v.lA) * lL * 0.55;
+            const lMidY = sy + Math.sin(v.lA) * lL * 0.55;
+            const lEndX = lMidX + (tipX - lMidX) * v.lC * 0.3 + Math.cos(v.lA) * lL * 0.3;
+            const lEndY = lMidY + (tipY - lMidY) * v.lC * 0.25 + Math.sin(v.lA) * lL * 0.15;
 
-            X.beginPath();
-            X.moveTo(sx - s * 1, sy);
-            X.quadraticCurveTo(lCx, lCy, lEx, lEy);
-            X.strokeStyle = `rgba(40,35,25,${0.15 + v.lLen * 0.12})`;
-            X.lineWidth = s * 2.2 * v.lLen;
-            X.stroke();
-            X.beginPath();
-            X.moveTo(sx - s * 1.5, sy - s * 0.8);
-            X.quadraticCurveTo(lCx - s * 0.5, lCy - s * 1, lEx, lEy - s * 0.5);
-            X.strokeStyle = `rgba(210,200,185,${(0.2 + Math.max(0, -lightDir) * 0.35) * v.lLen})`;
-            X.lineWidth = s * 1.0 * v.lLen;
-            X.stroke();
+            X.beginPath(); X.moveTo(sx - s, sy);
+            X.quadraticCurveTo(lMidX, lMidY, lEndX, lEndY);
+            X.strokeStyle = `rgba(35,30,20,${0.2 + v.len * 0.15})`;
+            X.lineWidth = s * 2.5 * v.len; X.stroke();
 
-            if (v.lLen > 0.4) {
-                for (let k = 0.3; k < 0.85; k += 0.18 + Math.random() * 0.1) {
-                    const bx = (1-k)*(1-k)*sx + 2*(1-k)*k*lCx + k*k*lEx;
-                    const by = (1-k)*(1-k)*sy + 2*(1-k)*k*lCy + k*k*lEy;
-                    const sLen = s * 15 * v.lLen * (1 - k * 0.5);
-                    const sAng = Math.PI + v.lAng - 0.4 - Math.random() * 0.3;
-                    X.beginPath();
-                    X.moveTo(bx, by);
-                    X.quadraticCurveTo(
-                        bx + Math.cos(sAng) * sLen * 0.6,
-                        by + Math.sin(sAng) * sLen * 0.6,
-                        bx + Math.cos(sAng) * sLen,
-                        by + Math.sin(sAng) * sLen
-                    );
-                    X.strokeStyle = `rgba(180,170,155,${0.12 + Math.max(0, -lightDir) * 0.12})`;
-                    X.lineWidth = s * 0.5;
-                    X.stroke();
+            X.beginPath(); X.moveTo(sx - s * 1.5, sy - s);
+            X.quadraticCurveTo(lMidX - s * 0.5, lMidY - s * 1.2, lEndX - s * 0.3, lEndY - s * 0.5);
+            X.strokeStyle = `rgba(215,205,190,${(0.25 + Math.max(0, -ld) * 0.35) * v.len})`;
+            X.lineWidth = s * 1.2 * v.len; X.stroke();
+
+            if (v.len > 0.3) {
+                const nSub = Math.floor(v.len * 5);
+                for (let k = 0; k < nSub; k++) {
+                    const t = 0.2 + k * (0.65 / nSub) + (Math.random() - 0.5) * 0.05;
+                    const bx = (1-t)*(1-t)*sx + 2*(1-t)*t*lMidX + t*t*lEndX;
+                    const by = (1-t)*(1-t)*sy + 2*(1-t)*t*lMidY + t*t*lEndY;
+                    const sL = s * 18 * v.len * (1 - t * 0.6) * (0.5 + Math.random() * 0.5);
+                    const sA = v.lA - 0.3 - Math.random() * 0.4;
+                    const sEndX = bx + Math.cos(sA) * sL;
+                    const sEndY = by + Math.sin(sA) * sL;
+                    const sCpX = bx + Math.cos(sA) * sL * 0.6 + (tipX - bx) * 0.05;
+                    const sCpY = by + Math.sin(sA) * sL * 0.6 + (tipY - by) * 0.03;
+
+                    X.beginPath(); X.moveTo(bx, by);
+                    X.quadraticCurveTo(sCpX, sCpY, sEndX, sEndY);
+                    X.strokeStyle = `rgba(175,165,148,${(0.1 + Math.max(0, -ld) * 0.15) * v.len})`;
+                    X.lineWidth = s * 0.6; X.stroke();
+
+                    if (Math.random() < 0.5 && v.len > 0.5) {
+                        const uL = sL * 0.4;
+                        const uA = sA - 0.3 - Math.random() * 0.3;
+                        const ut = 0.5 + Math.random() * 0.3;
+                        const ux = bx + (sEndX - bx) * ut;
+                        const uy = by + (sEndY - by) * ut;
+                        X.beginPath(); X.moveTo(ux, uy);
+                        X.lineTo(ux + Math.cos(uA) * uL, uy + Math.sin(uA) * uL);
+                        X.strokeStyle = `rgba(170,160,142,${0.06 + Math.max(0, -ld) * 0.06})`;
+                        X.lineWidth = s * 0.3; X.stroke();
+                    }
                 }
             }
         }
@@ -293,211 +260,172 @@
     function render() {
         const s = Math.min(W, H) * 0.0022;
 
-        // 종이 배경
-        X.fillStyle = '#F5F1EB';
-        X.fillRect(0, 0, W, H);
+        // 종이
+        X.fillStyle = '#F5F1EB'; X.fillRect(0, 0, W, H);
         for (let x = 0; x < W; x += 512)
-            for (let y = 0; y < H; y += 512)
-                X.drawImage(paper, x, y);
+            for (let y = 0; y < H; y += 512) X.drawImage(paper, x, y);
 
         X.save();
-        X.translate(W/2, H/2);
-        X.rotate(lx * 0.025 + Math.sin(Date.now() * 0.0006) * 0.008);
+        X.translate(W/2 + s * 10, H/2);
+        // 원본 방향: 줄기=오른쪽위, 끝=왼쪽아래 → 약 -23도 기울임
+        X.rotate(TILT + lx * 0.02 + Math.sin(Date.now() * 0.0005) * 0.006);
 
         // ── 그림자 ──
         X.save();
-        X.translate(-lx * s * 22 + s * 3, s * 18 - ly * s * 12);
-        X.scale(1, 0.22);
-        const shG = X.createRadialGradient(0, s * 135, 0, 0, s * 135, s * 110);
-        shG.addColorStop(0, 'rgba(60,50,40,0.10)');
-        shG.addColorStop(0.5, 'rgba(60,50,40,0.04)');
-        shG.addColorStop(1, 'rgba(60,50,40,0)');
+        X.translate(-lx * s * 24, s * 22 - ly * s * 14);
+        X.scale(1, 0.2);
+        const shG = X.createRadialGradient(0, s * 130, 0, 0, s * 130, s * 120);
+        shG.addColorStop(0, 'rgba(55,45,35,0.10)');
+        shG.addColorStop(0.5, 'rgba(55,45,35,0.035)');
+        shG.addColorStop(1, 'rgba(55,45,35,0)');
         X.fillStyle = shG;
-        X.beginPath();
-        X.ellipse(0, s * 135, s * 110, s * 55, 0, 0, Math.PI * 2);
-        X.fill();
-        X.restore();
+        X.beginPath(); X.ellipse(0, s * 130, s * 120, s * 55, 0, 0, Math.PI * 2);
+        X.fill(); X.restore();
 
-        // ── 1. 기본 톤 (밝은 회색 ~ 어두운 회색 그라데이션) ──
+        // ── 1. 기본 톤 ──
         leafShape(s);
-        // 빛 방향에 따라 그라데이션 축 회전
-        const gAngle = Math.atan2(ly, lx);
-        const gDist = s * 150;
-        const baseG = X.createLinearGradient(
-            Math.cos(gAngle + Math.PI) * gDist,
-            Math.sin(gAngle + Math.PI) * gDist,
-            Math.cos(gAngle) * gDist,
-            Math.sin(gAngle) * gDist
+        const gA = Math.atan2(ly, lx);
+        const gD = s * 160;
+        const bG = X.createLinearGradient(
+            Math.cos(gA + Math.PI) * gD, Math.sin(gA + Math.PI) * gD,
+            Math.cos(gA) * gD, Math.sin(gA) * gD
         );
-        // 빛 반대쪽: 매우 어둡게 / 빛쪽: 밝게
-        baseG.addColorStop(0, '#1E1A16');
-        baseG.addColorStop(0.15, '#2A2622');
-        baseG.addColorStop(0.3, '#3E3A35');
-        baseG.addColorStop(0.5, '#5A5550');
-        baseG.addColorStop(0.7, '#787270');
-        baseG.addColorStop(0.85, '#908A85');
-        baseG.addColorStop(1, '#A8A298');
-        X.fillStyle = baseG;
-        X.fill();
+        bG.addColorStop(0,    '#181510');
+        bG.addColorStop(0.12, '#252220');
+        bG.addColorStop(0.28, '#383432');
+        bG.addColorStop(0.45, '#504C4A');
+        bG.addColorStop(0.62, '#6A6664');
+        bG.addColorStop(0.78, '#858080');
+        bG.addColorStop(0.9,  '#9A9590');
+        bG.addColorStop(1,    '#ACA6A0');
+        X.fillStyle = bG; X.fill();
 
-        // ── 2. 볼록 하이라이트 (빛이 닿는 부분) ──
-        leafShape(s);
-        X.save(); X.clip();
-        const hlX = lx * s * 55, hlY = ly * s * 45 - s * 15;
-        const hlG = X.createRadialGradient(hlX, hlY, 0, hlX, hlY, s * 110);
-        hlG.addColorStop(0, 'rgba(250,245,235,0.25)');
-        hlG.addColorStop(0.3, 'rgba(230,225,215,0.1)');
-        hlG.addColorStop(0.6, 'rgba(0,0,0,0)');
-        hlG.addColorStop(1, 'rgba(15,12,8,0.08)');
-        X.fillStyle = hlG;
-        X.fillRect(-s * 160, -s * 160, s * 320, s * 340);
+        // ── 2. 하이라이트 ──
+        leafShape(s); X.save(); X.clip();
+        const hlx = lx * s * 55, hly = ly * s * 45 - s * 18;
+        let g = X.createRadialGradient(hlx, hly, 0, hlx, hly, s * 115);
+        g.addColorStop(0, 'rgba(255,250,240,0.28)');
+        g.addColorStop(0.3, 'rgba(235,230,220,0.12)');
+        g.addColorStop(0.6, 'rgba(0,0,0,0)');
+        g.addColorStop(1, 'rgba(10,8,5,0.06)');
+        X.fillStyle = g; X.fillRect(-s * 170, -s * 170, s * 340, s * 360);
 
-        // 둘째 하이라이트 (상단 볼록)
-        const h2X = lx * s * 30, h2Y = -s * 50 + ly * s * 25;
-        const h2G = X.createRadialGradient(h2X, h2Y, 0, h2X, h2Y, s * 80);
-        h2G.addColorStop(0, 'rgba(255,250,240,0.18)');
-        h2G.addColorStop(0.5, 'rgba(0,0,0,0)');
-        h2G.addColorStop(1, 'rgba(0,0,0,0)');
-        X.fillStyle = h2G;
-        X.fillRect(-s * 160, -s * 160, s * 320, s * 340);
+        // 상단 볼록
+        g = X.createRadialGradient(lx * s * 35, -s * 55 + ly * s * 20, 0, lx * s * 35, -s * 55 + ly * s * 20, s * 85);
+        g.addColorStop(0, 'rgba(255,250,240,0.2)');
+        g.addColorStop(0.5, 'rgba(0,0,0,0)');
+        X.fillStyle = g; X.fillRect(-s * 170, -s * 170, s * 340, s * 360);
+
+        // 잎맥 사이 볼록면 명암 (부분 하이라이트)
+        for (let i = 0; i < 5; i++) {
+            const py = -s * 80 + i * s * 55;
+            const px = lx * s * (20 + i * 5);
+            g = X.createRadialGradient(px, py, 0, px, py, s * 45);
+            g.addColorStop(0, `rgba(245,240,230,${0.05 + Math.random() * 0.04})`);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            X.fillStyle = g;
+            X.fillRect(px - s * 50, py - s * 50, s * 100, s * 100);
+        }
         X.restore();
 
-        // ── 3. 해칭 레이어 (연필 결) ──
-        // 빛 방향에 따라 어두운 쪽에 더 많이 깔림
-        leafShape(s);
-        X.save(); X.clip();
-
-        // 메인 해칭 — 어두운 쪽에 진하게
-        X.globalAlpha = 0.45 + (1 - Math.max(lx, -lx)) * 0.1;
+        // ── 3. 해칭 ──
+        leafShape(s); X.save(); X.clip();
         X.globalCompositeOperation = 'multiply';
-        for (let tx = -s * 140; tx < s * 140; tx += hatch1.width)
-            for (let ty = -s * 150; ty < s * 160; ty += hatch1.height)
-                X.drawImage(hatch1, tx, ty);
+        X.globalAlpha = 0.5;
+        for (let tx = -s * 150; tx < s * 150; tx += H1.width)
+            for (let ty = -s * 160; ty < s * 170; ty += H1.height)
+                X.drawImage(H1, tx, ty);
+        X.globalAlpha = 0.35;
+        for (let tx = -s * 150; tx < s * 150; tx += H2.width)
+            for (let ty = -s * 160; ty < s * 170; ty += H2.height)
+                X.drawImage(H2, tx, ty);
+        X.globalAlpha = 0.2;
+        for (let tx = -s * 150; tx < s * 150; tx += H3.width)
+            for (let ty = -s * 160; ty < s * 170; ty += H3.height)
+                X.drawImage(H3, tx, ty);
+        X.globalCompositeOperation = 'source-over'; X.globalAlpha = 1;
 
-        // 크로스해칭 — 어두운 영역에만
-        X.globalAlpha = 0.3;
-        for (let tx = -s * 140; tx < s * 140; tx += hatch2.width)
-            for (let ty = -s * 150; ty < s * 160; ty += hatch2.height)
-                X.drawImage(hatch2, tx, ty);
-
-        // 세번째 해칭 — 가장 어두운 부분
-        X.globalAlpha = 0.15;
-        for (let tx = -s * 140; tx < s * 140; tx += hatch3.width)
-            for (let ty = -s * 150; ty < s * 160; ty += hatch3.height)
-                X.drawImage(hatch3, tx, ty);
-
-        X.globalCompositeOperation = 'source-over';
-        X.globalAlpha = 1;
-
-        // 빛이 닿는 쪽은 해칭을 지워서 밝게 (종이색 복원)
-        const eraseG = X.createRadialGradient(hlX, hlY, 0, hlX, hlY, s * 90);
-        eraseG.addColorStop(0, 'rgba(245,241,235,0.35)');
-        eraseG.addColorStop(0.4, 'rgba(245,241,235,0.15)');
-        eraseG.addColorStop(1, 'rgba(245,241,235,0)');
-        X.fillStyle = eraseG;
-        X.fillRect(-s * 160, -s * 160, s * 320, s * 340);
-
+        // 밝은 쪽 해칭 지우기
+        g = X.createRadialGradient(hlx, hly, 0, hlx, hly, s * 100);
+        g.addColorStop(0, 'rgba(245,241,235,0.4)');
+        g.addColorStop(0.4, 'rgba(245,241,235,0.15)');
+        g.addColorStop(1, 'rgba(245,241,235,0)');
+        X.fillStyle = g; X.fillRect(-s * 170, -s * 170, s * 340, s * 360);
         X.restore();
 
         // ── 4. 잎맥 ──
-        leafShape(s);
-        X.save(); X.clip();
+        leafShape(s); X.save(); X.clip();
         drawVeins(s, lx);
         X.restore();
 
         // ── 5. 가장자리 ──
         leafShape(s);
-        X.strokeStyle = `rgba(40,35,28,${0.5 + Math.abs(lx) * 0.15})`;
-        X.lineWidth = s * 1.6;
-        X.lineJoin = 'round';
-        X.stroke();
+        X.strokeStyle = `rgba(35,30,22,${0.5 + Math.abs(lx) * 0.15})`;
+        X.lineWidth = s * 1.5; X.lineJoin = 'round'; X.stroke();
 
-        // 가장자리 안쪽 밝은 선 (빛이 가장자리를 스치는 느낌)
-        leafShape(s);
-        X.save(); X.clip();
-        leafShape(s);
-        X.strokeStyle = `rgba(200,195,185,${0.06 + Math.max(0, lx) * 0.06})`;
-        X.lineWidth = s * 4;
-        X.stroke();
-        X.restore();
+        // 가장자리 림라이트
+        leafShape(s); X.save(); X.clip(); leafShape(s);
+        X.strokeStyle = `rgba(210,205,195,${0.05 + Math.max(0, lx) * 0.05})`;
+        X.lineWidth = s * 5; X.stroke(); X.restore();
 
         // ── 6. 줄기 ──
-        // 줄기: 짧고, 약간 오른쪽 위로 살짝 곡선
+        // 원본: 오른쪽 위로 짧게, 약간 곡선, 끝에 작은 꼭지
         X.beginPath();
-        X.moveTo(s * 5, -s * 114);
-        X.bezierCurveTo(s * 12, -s * 128, s * 16, -s * 140, s * 20, -s * 155);
-        X.strokeStyle = `rgba(65,55,42,${0.6 + Math.abs(lx) * 0.2})`;
-        X.lineWidth = s * 3;
-        X.lineCap = 'round';
-        X.stroke();
-
-        // 줄기 밝은 면
+        X.moveTo(s * 5, -s * 116);
+        X.bezierCurveTo(s * 14, -s * 130, s * 18, -s * 144, s * 22, -s * 160);
+        X.strokeStyle = `rgba(60,50,38,${0.6 + Math.abs(lx) * 0.2})`;
+        X.lineWidth = s * 3.2; X.lineCap = 'round'; X.stroke();
+        // 줄기 밝은면
         X.beginPath();
-        X.moveTo(s * 6.5, -s * 115);
-        X.bezierCurveTo(s * 13, -s * 129, s * 17, -s * 141, s * 21, -s * 154);
-        X.strokeStyle = `rgba(190,180,165,${0.18 + Math.max(0, lx) * 0.2})`;
-        X.lineWidth = s * 1;
-        X.stroke();
-
-        // 줄기 끝 꼭지 (작은 원형 돌기)
+        X.moveTo(s * 6.5, -s * 117);
+        X.bezierCurveTo(s * 15, -s * 131, s * 19, -s * 145, s * 23, -s * 159);
+        X.strokeStyle = `rgba(185,175,158,${0.2 + Math.max(0, lx) * 0.2})`;
+        X.lineWidth = s * 1; X.stroke();
+        // 꼭지
         X.beginPath();
-        X.arc(s * 20.5, -s * 156, s * 2.2, 0, Math.PI * 2);
-        X.fillStyle = `rgba(75,65,50,${0.5 + Math.abs(lx) * 0.15})`;
+        X.arc(s * 22.5, -s * 161, s * 2.5, 0, Math.PI * 2);
+        X.fillStyle = `rgba(70,58,42,${0.5 + Math.abs(lx) * 0.15})`;
         X.fill();
-        // 꼭지 하이라이트
         X.beginPath();
-        X.arc(s * 20 + lx * s * 0.8, -s * 157, s * 0.8, 0, Math.PI * 2);
-        X.fillStyle = `rgba(200,190,175,${0.25 + Math.max(0, lx) * 0.2})`;
+        X.arc(s * 22 + lx * s, -s * 162, s * 1, 0, Math.PI * 2);
+        X.fillStyle = `rgba(200,190,172,${0.25 + Math.max(0, lx) * 0.2})`;
         X.fill();
 
         X.restore();
     }
 
-    // ─── 파티클 (연필 가루) ───
+    // ─── 파티클 ───
     const parts = [];
     class P {
         constructor() {
             const s = Math.min(W, H) * 0.0022;
-            this.x = W/2 + (Math.random() - 0.5) * s * 180;
-            this.y = H/2 + (Math.random() - 0.6) * s * 180;
+            this.x = W/2 + (Math.random() - 0.5) * s * 200;
+            this.y = H/2 + (Math.random() - 0.6) * s * 200;
             this.vx = (Math.random() - 0.5) * 0.3;
             this.vy = 0.2 + Math.random() * 0.5;
             this.sz = 0.3 + Math.random() * 1;
-            this.a = 0.08 + Math.random() * 0.12;
-            this.life = 1;
-            this.dec = 0.003 + Math.random() * 0.005;
+            this.a = 0.06 + Math.random() * 0.1;
+            this.life = 1; this.dec = 0.003 + Math.random() * 0.005;
             this.r = Math.random() * Math.PI;
         }
-        update() {
-            this.x += this.vx; this.y += this.vy;
-            this.r += 0.01; this.life -= this.dec;
-            return this.life > 0;
-        }
+        update() { this.x += this.vx; this.y += this.vy; this.r += 0.01; this.life -= this.dec; return this.life > 0; }
         draw() {
-            X.save();
-            X.translate(this.x, this.y);
-            X.rotate(this.r);
-            X.globalAlpha = this.a * this.life;
-            X.fillStyle = '#6A6258';
-            X.fillRect(0, 0, this.sz, this.sz * 2.5);
-            X.restore();
+            X.save(); X.translate(this.x, this.y); X.rotate(this.r);
+            X.globalAlpha = this.a * this.life; X.fillStyle = '#6A6258';
+            X.fillRect(0, 0, this.sz, this.sz * 2.5); X.restore();
         }
     }
 
-    // ─── 루프 ───
     let frame = 0;
     function loop() {
         requestAnimationFrame(loop);
         frame++;
         lx += (tlx - lx) * 0.04;
         ly += (tly - ly) * 0.04;
-
         render();
-
-        if (frame % 10 === 0 && parts.length < 35) parts.push(new P());
+        if (frame % 10 === 0 && parts.length < 30) parts.push(new P());
         for (let i = parts.length - 1; i >= 0; i--) {
-            if (!parts[i].update()) parts.splice(i, 1);
-            else parts[i].draw();
+            if (!parts[i].update()) parts.splice(i, 1); else parts[i].draw();
         }
     }
     loop();
