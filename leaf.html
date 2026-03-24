@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나뭇잎 하나 — 2026. 3. 24</title>
+    <meta name="theme-color" content="#F5F2ED">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>🍃</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #F5F2ED;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none;
+        }
+        canvas { display: block; }
+        .date {
+            position: fixed;
+            top: 32px;
+            left: 36px;
+            font-family: 'Georgia', serif;
+            font-size: 13px;
+            color: #C0B8AC;
+            letter-spacing: 0.05em;
+            pointer-events: none;
+        }
+        .hint {
+            position: fixed;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Georgia', serif;
+            font-size: 11px;
+            color: #C8C0B4;
+            letter-spacing: 0.1em;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 3s;
+        }
+        .cursor-dot {
+            position: fixed;
+            width: 5px;
+            height: 5px;
+            background: rgba(80,70,60,0.25);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 999;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="date">2026. 3. 24</div>
+    <div class="hint">빛을 움직여보세요</div>
+    <div class="cursor-dot" id="cursor"></div>
+    <canvas id="c"></canvas>
+<script>
+{
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const cursorEl = document.getElementById('cursor');
+    const hintEl = document.querySelector('.hint');
+
+    let W, H, cx, cy;
+    let needsRedraw = true;
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+        cx = W / 2;
+        cy = H / 2;
+        needsRedraw = true;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    let mouseX = W * 0.62, mouseY = H * 0.32;
+    let lx = 0.5, ly = -0.3;
+    let tlx = 0.5, tly = -0.3;
+    let hintHidden = false;
+    let time = 0;
+
+    document.addEventListener('mousemove', e => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        cursorEl.style.left = mouseX + 'px';
+        cursorEl.style.top = mouseY + 'px';
+        tlx = (mouseX - cx) / (W / 2);
+        tly = (mouseY - cy) / (H / 2);
+        needsRedraw = true;
+        if (!hintHidden) { hintHidden = true; hintEl.style.opacity = '0'; }
+    });
+    document.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+        mouseX = t.clientX; mouseY = t.clientY;
+        tlx = (mouseX - cx) / (W / 2);
+        tly = (mouseY - cy) / (H / 2);
+        needsRedraw = true;
+        if (!hintHidden) { hintHidden = true; hintEl.style.opacity = '0'; }
+    }, { passive: true });
+
+    // ─── 연필 텍스처 생성 ───
+    function makePencilTexture(w, h, density) {
+        const off = document.createElement('canvas');
+        off.width = w; off.height = h;
+        const c = off.getContext('2d');
+
+        // 가는 사선 스트로크들
+        c.lineCap = 'round';
+        for (let i = 0; i < density; i++) {
+            const sx = Math.random() * w;
+            const sy = Math.random() * h;
+            const len = 3 + Math.random() * 12;
+            const angle = -0.7 + Math.random() * 0.4; // 왼쪽 위 → 오른쪽 아래 경향
+            c.beginPath();
+            c.moveTo(sx, sy);
+            c.lineTo(sx + Math.cos(angle) * len, sy + Math.sin(angle) * len);
+            c.strokeStyle = `rgba(40,35,25,${0.03 + Math.random() * 0.06})`;
+            c.lineWidth = 0.3 + Math.random() * 0.8;
+            c.stroke();
+        }
+        // 점 노이즈
+        const id = c.getImageData(0, 0, w, h);
+        const d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+            if (Math.random() < 0.15) {
+                const v = Math.floor(Math.random() * 50);
+                d[i] = d[i + 1] = d[i + 2] = v;
+                d[i + 3] = Math.min(255, d[i + 3] + Math.floor(Math.random() * 15));
+            }
+        }
+        c.putImageData(id, 0, 0);
+        return off;
+    }
+
+    function makePaperTexture() {
+        const off = document.createElement('canvas');
+        off.width = 512; off.height = 512;
+        const c = off.getContext('2d');
+        c.fillStyle = '#F5F2ED';
+        c.fillRect(0, 0, 512, 512);
+        const id = c.getImageData(0, 0, 512, 512);
+        const d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const n = (Math.random() - 0.5) * 7;
+            d[i] += n; d[i + 1] += n; d[i + 2] += n - 1;
+        }
+        c.putImageData(id, 0, 0);
+        return off;
+    }
+
+    const pencilTex = makePencilTexture(400, 400, 3000);
+    const paperTex = makePaperTexture();
+
+    // ─── 잎 윤곽 (원본 데생의 하트형 잎) ───
+    // 줄기가 오른쪽 위, 끝이 왼쪽 아래로 뾰족
+    // 원본은 약간 비대칭이고 왼쪽이 더 볼록함
+
+    function leafPath(s) {
+        ctx.beginPath();
+        // 줄기 접합 (오른쪽 위)
+        ctx.moveTo(s * 10, -s * 120);
+
+        // 오른쪽 상단 곡선 (넓게 벌어짐)
+        ctx.bezierCurveTo(
+            s * 70, -s * 135,
+            s * 130, -s * 85,
+            s * 125, -s * 20
+        );
+        // 오른쪽 중단 → 하단
+        ctx.bezierCurveTo(
+            s * 118, s * 40,
+            s * 75, s * 100,
+            s * 20, s * 135
+        );
+        // 잎 끝 (뾰족하게)
+        ctx.bezierCurveTo(
+            s * 5, s * 148,
+            -s * 5, s * 150,
+            -s * 12, s * 145
+        );
+        // 왼쪽 하단 → 중단
+        ctx.bezierCurveTo(
+            -s * 55, s * 115,
+            -s * 115, s * 55,
+            -s * 128, -s * 10
+        );
+        // 왼쪽 상단 (약간 더 볼록)
+        ctx.bezierCurveTo(
+            -s * 135, -s * 80,
+            -s * 85, -s * 135,
+            -s * 15, -s * 122
+        );
+        // 줄기로 돌아옴
+        ctx.bezierCurveTo(
+            -s * 5, -s * 121,
+            s * 5, -s * 121,
+            s * 10, -s * 120
+        );
+        ctx.closePath();
+    }
+
+    // ─── 잎맥 ───
+    function drawVeins(s, lightDir) {
+        ctx.save();
+
+        // 중심맥 — 줄기에서 끝까지 약간 곡선
+        ctx.beginPath();
+        ctx.moveTo(s * 6, -s * 118);
+        ctx.bezierCurveTo(
+            s * 4, -s * 50,
+            -s * 2, s * 40,
+            -s * 6, s * 142
+        );
+        // 빛 방향에 따라 중심맥 밝기 변화
+        const midBright = 0.55 + Math.abs(lightDir) * 0.2;
+        ctx.strokeStyle = `rgba(210,200,185,${midBright})`;
+        ctx.lineWidth = s * 2.8;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        // 중심맥 하이라이트
+        ctx.beginPath();
+        ctx.moveTo(s * 7, -s * 116);
+        ctx.bezierCurveTo(s * 5, -s * 48, -s * 1, s * 42, -s * 5, s * 140);
+        ctx.strokeStyle = `rgba(235,228,215,${0.15 + Math.max(0, lightDir) * 0.2})`;
+        ctx.lineWidth = s * 1;
+        ctx.stroke();
+
+        // 측맥 데이터 [중심맥상Y, 오른쪽끝X, 오른쪽끝Y, 왼쪽끝X, 왼쪽끝Y, 두께]
+        const veins = [
+            { my: -0.82, rx: 0.6, ry: -0.75, lx: -0.65, ly: -0.72, w: 0.65 },
+            { my: -0.55, rx: 0.85, ry: -0.38, lx: -0.9, ly: -0.35, w: 0.85 },
+            { my: -0.28, rx: 0.92, ry: -0.02, lx: -0.95, ly: 0.02, w: 1.0 },
+            { my: 0.0,   rx: 0.88, ry: 0.28,  lx: -0.92, ly: 0.32, w: 0.9 },
+            { my: 0.25,  rx: 0.72, ry: 0.55,  lx: -0.78, ly: 0.58, w: 0.75 },
+            { my: 0.48,  rx: 0.52, ry: 0.78,  lx: -0.58, ly: 0.82, w: 0.6 },
+            { my: 0.68,  rx: 0.32, ry: 0.92,  lx: -0.38, ly: 0.95, w: 0.4 },
+            { my: 0.85,  rx: 0.15, ry: 1.02,  lx: -0.2, ly: 1.04, w: 0.25 },
+        ];
+
+        for (const v of veins) {
+            const startY = v.my * s * 130;
+            const startX = s * 3 - v.my * s * 4; // 중심맥을 따라 약간 이동
+
+            // 오른쪽 맥
+            const rex = v.rx * s * 120;
+            const rey = v.ry * s * 130;
+            const rcx = (startX + rex) * 0.45 + s * 8;
+            const rcy = startY + (rey - startY) * 0.5 - s * 5;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(rcx, rcy, rex, rey);
+            ctx.strokeStyle = `rgba(200,190,170,${0.35 + Math.max(0, lightDir) * 0.25})`;
+            ctx.lineWidth = s * 1.6 * v.w;
+            ctx.stroke();
+
+            // 오른쪽 세맥
+            if (v.w > 0.4) {
+                const steps = Math.floor(v.w * 3.5);
+                for (let k = 0; k < steps; k++) {
+                    const t = 0.3 + k * (0.55 / steps);
+                    const bx = (1-t)*(1-t)*startX + 2*(1-t)*t*rcx + t*t*rex;
+                    const by = (1-t)*(1-t)*startY + 2*(1-t)*t*rcy + t*t*rey;
+                    const subLen = s * 18 * v.w * (1 - t * 0.6);
+                    const subAngle = Math.atan2(rey - startY, rex - startX) + 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(bx, by);
+                    ctx.quadraticCurveTo(
+                        bx + Math.cos(subAngle) * subLen * 0.5,
+                        by + Math.sin(subAngle) * subLen * 0.5,
+                        bx + Math.cos(subAngle) * subLen,
+                        by + Math.sin(subAngle) * subLen
+                    );
+                    ctx.strokeStyle = `rgba(195,185,165,${0.15 + Math.max(0, lightDir) * 0.1})`;
+                    ctx.lineWidth = s * 0.5 * v.w;
+                    ctx.stroke();
+                }
+            }
+
+            // 왼쪽 맥
+            const lex = v.lx * s * 120;
+            const ley = v.ly * s * 130;
+            const lcx = (startX + lex) * 0.45 - s * 8;
+            const lcy = startY + (ley - startY) * 0.5 - s * 5;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(lcx, lcy, lex, ley);
+            ctx.strokeStyle = `rgba(200,190,170,${0.35 + Math.max(0, -lightDir) * 0.25})`;
+            ctx.lineWidth = s * 1.6 * v.w;
+            ctx.stroke();
+
+            // 왼쪽 세맥
+            if (v.w > 0.4) {
+                const steps = Math.floor(v.w * 3.5);
+                for (let k = 0; k < steps; k++) {
+                    const t = 0.3 + k * (0.55 / steps);
+                    const bx = (1-t)*(1-t)*startX + 2*(1-t)*t*lcx + t*t*lex;
+                    const by = (1-t)*(1-t)*startY + 2*(1-t)*t*lcy + t*t*ley;
+                    const subLen = s * 18 * v.w * (1 - t * 0.6);
+                    const subAngle = Math.atan2(ley - startY, lex - startX) - 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(bx, by);
+                    ctx.quadraticCurveTo(
+                        bx + Math.cos(subAngle) * subLen * 0.5,
+                        by + Math.sin(subAngle) * subLen * 0.5,
+                        bx + Math.cos(subAngle) * subLen,
+                        by + Math.sin(subAngle) * subLen
+                    );
+                    ctx.strokeStyle = `rgba(195,185,165,${0.15 + Math.max(0, -lightDir) * 0.1})`;
+                    ctx.lineWidth = s * 0.5 * v.w;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        ctx.restore();
+    }
+
+    // ─── 연필 해칭 레이어 ───
+    function drawHatching(s, lightDir, lightY) {
+        ctx.save();
+        leafPath(s);
+        ctx.clip();
+
+        // 사선 해칭 — 빛 반대편에 더 밀도 높게
+        const hatchAngle = -0.6;
+        const cos = Math.cos(hatchAngle), sin = Math.sin(hatchAngle);
+        const range = s * 180;
+
+        for (let i = -range; i < range; i += 2.5) {
+            // 빛 방향에 따른 밀도 변조
+            const normalizedPos = i / range; // -1 ~ 1
+            const lightAlignment = normalizedPos * lightDir;
+            // 빛과 같은 편이면 밝게(스킵), 반대편이면 어둡게(그리기)
+            const darkness = 0.5 - lightAlignment * 0.4 + (1 + lightY) * 0.15;
+            if (Math.random() > darkness) continue;
+
+            ctx.beginPath();
+            const sx = cos * i - sin * (-range);
+            const sy = sin * i + cos * (-range);
+            const ex = cos * i - sin * range;
+            const ey = sin * i + cos * range;
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(35,30,20,${0.02 + darkness * 0.04})`;
+            ctx.lineWidth = 0.3 + Math.random() * 0.5;
+            ctx.stroke();
+        }
+
+        // 교차 해칭 — 어두운 부분에만
+        const hatch2 = -0.6 + Math.PI / 2.5;
+        const cos2 = Math.cos(hatch2), sin2 = Math.sin(hatch2);
+        for (let i = -range; i < range; i += 4) {
+            const normalizedPos = i / range;
+            const darkness = 0.3 - normalizedPos * lightDir * 0.35;
+            if (Math.random() > darkness) continue;
+
+            ctx.beginPath();
+            const sx = cos2 * i - sin2 * (-range);
+            const sy = sin2 * i + cos2 * (-range);
+            const ex = cos2 * i - sin2 * range;
+            const ey = sin2 * i + cos2 * range;
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(30,25,15,${0.015 + darkness * 0.025})`;
+            ctx.lineWidth = 0.2 + Math.random() * 0.3;
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    // ─── 메인 렌더링 ───
+    function render() {
+        const s = Math.min(W, H) * 0.0022;
+        const sway = time * 0.006;
+
+        // 배경
+        ctx.fillStyle = '#F5F2ED';
+        ctx.fillRect(0, 0, W, H);
+        if (paperTex) {
+            ctx.globalAlpha = 0.5;
+            for (let x = 0; x < W; x += 512) {
+                for (let y = 0; y < H; y += 512) ctx.drawImage(paperTex, x, y);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.save();
+        ctx.translate(cx + s * 5, cy);
+        // 미세한 기울기
+        ctx.rotate(lx * 0.03 + Math.sin(sway) * 0.01);
+
+        // ── 그림자 ──
+        ctx.save();
+        ctx.translate(-lx * s * 20 + s * 5, s * 15 - ly * s * 10);
+        ctx.scale(1, 0.25);
+        ctx.beginPath();
+        ctx.ellipse(0, s * 140, s * 95, s * 50, -0.1, 0, Math.PI * 2);
+        const shGrad = ctx.createRadialGradient(0, s * 140, 0, 0, s * 140, s * 95);
+        shGrad.addColorStop(0, 'rgba(70,60,50,0.1)');
+        shGrad.addColorStop(0.5, 'rgba(70,60,50,0.04)');
+        shGrad.addColorStop(1, 'rgba(70,60,50,0)');
+        ctx.fillStyle = shGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // ── 잎 기본 톤 ──
+        leafPath(s);
+        const baseG = ctx.createLinearGradient(
+            -s * 130 + lx * s * 30, -s * 80,
+            s * 130 + lx * s * 30, s * 100
+        );
+        if (lx >= 0) {
+            baseG.addColorStop(0, '#2E2A25');
+            baseG.addColorStop(0.2, '#3D3833');
+            baseG.addColorStop(0.4, '#585250');
+            baseG.addColorStop(0.6, '#706868');
+            baseG.addColorStop(0.8, '#8A8280');
+            baseG.addColorStop(1, '#9A928C');
+        } else {
+            baseG.addColorStop(0, '#9A928C');
+            baseG.addColorStop(0.2, '#8A8280');
+            baseG.addColorStop(0.4, '#706868');
+            baseG.addColorStop(0.6, '#585250');
+            baseG.addColorStop(0.8, '#3D3833');
+            baseG.addColorStop(1, '#2E2A25');
+        }
+        ctx.fillStyle = baseG;
+        ctx.fill();
+
+        // ── 빛 반사 (하이라이트 영역) ──
+        leafPath(s);
+        ctx.save();
+        ctx.clip();
+        const hlCx = lx * s * 60;
+        const hlCy = ly * s * 50 - s * 20;
+        const hlG = ctx.createRadialGradient(hlCx, hlCy, 0, hlCx, hlCy, s * 120);
+        hlG.addColorStop(0, 'rgba(250,245,235,0.22)');
+        hlG.addColorStop(0.35, 'rgba(220,215,205,0.08)');
+        hlG.addColorStop(0.7, 'rgba(0,0,0,0)');
+        hlG.addColorStop(1, 'rgba(20,15,10,0.08)');
+        ctx.fillStyle = hlG;
+        ctx.fillRect(-s * 160, -s * 160, s * 320, s * 340);
+        ctx.restore();
+
+        // ── 볼록한 느낌 (상단 하이라이트) ──
+        leafPath(s);
+        ctx.save();
+        ctx.clip();
+        const topHL = ctx.createRadialGradient(
+            lx * s * 40, -s * 50 + ly * s * 20, 0,
+            lx * s * 40, -s * 50 + ly * s * 20, s * 100
+        );
+        topHL.addColorStop(0, 'rgba(255,250,240,0.15)');
+        topHL.addColorStop(0.5, 'rgba(200,195,185,0.03)');
+        topHL.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = topHL;
+        ctx.fillRect(-s * 160, -s * 160, s * 320, s * 340);
+        ctx.restore();
+
+        // ── 해칭 (연필 질감) ──
+        drawHatching(s, lx, ly);
+
+        // ── 텍스처 오버레이 ──
+        leafPath(s);
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.45;
+        ctx.globalCompositeOperation = 'multiply';
+        const texScale = 1.2;
+        for (let tx = -s * 140; tx < s * 140; tx += pencilTex.width * texScale) {
+            for (let ty = -s * 150; ty < s * 160; ty += pencilTex.height * texScale) {
+                ctx.drawImage(pencilTex, tx, ty, pencilTex.width * texScale, pencilTex.height * texScale);
+            }
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // ── 잎맥 ──
+        leafPath(s);
+        ctx.save();
+        ctx.clip();
+        drawVeins(s, lx);
+        ctx.restore();
+
+        // ── 가장자리 선 ──
+        leafPath(s);
+        ctx.strokeStyle = `rgba(50,45,35,${0.45 + Math.abs(lx) * 0.15})`;
+        ctx.lineWidth = s * 1.8;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        // ── 가장자리 안쪽 림라이트 ──
+        leafPath(s);
+        ctx.save();
+        ctx.clip();
+        leafPath(s);
+        ctx.strokeStyle = `rgba(230,225,215,${0.06 + Math.max(0, -ly) * 0.05})`;
+        ctx.lineWidth = s * 6;
+        ctx.stroke();
+        ctx.restore();
+
+        // ── 줄기 ──
+        ctx.beginPath();
+        ctx.moveTo(s * 8, -s * 118);
+        ctx.bezierCurveTo(s * 18, -s * 135, s * 22, -s * 150, s * 28, -s * 168);
+        ctx.strokeStyle = `rgba(75,65,50,${0.65 + Math.abs(lx) * 0.2})`;
+        ctx.lineWidth = s * 2.8;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        // 줄기 하이라이트
+        ctx.beginPath();
+        ctx.moveTo(s * 9.5, -s * 119);
+        ctx.bezierCurveTo(s * 19, -s * 136, s * 23, -s * 151, s * 29, -s * 166);
+        ctx.strokeStyle = `rgba(190,180,165,${0.2 + Math.max(0, lx) * 0.15})`;
+        ctx.lineWidth = s * 0.9;
+        ctx.stroke();
+        // 줄기 끝 작은 돌기
+        ctx.beginPath();
+        ctx.moveTo(s * 28, -s * 168);
+        ctx.lineTo(s * 30, -s * 172);
+        ctx.strokeStyle = 'rgba(85,75,60,0.5)';
+        ctx.lineWidth = s * 1.5;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    // ─── 파티클 (연필 가루) ───
+    const particles = [];
+    class Particle {
+        constructor() {
+            const s = Math.min(W, H) * 0.0022;
+            this.x = cx + (Math.random() - 0.5) * s * 200;
+            this.y = cy + (Math.random() - 0.5) * s * 200;
+            this.vx = (Math.random() - 0.5) * 0.4;
+            this.vy = 0.3 + Math.random() * 0.6;
+            this.size = 0.4 + Math.random() * 1.2;
+            this.alpha = 0.1 + Math.random() * 0.15;
+            this.life = 1;
+            this.decay = 0.004 + Math.random() * 0.006;
+            this.rot = Math.random() * Math.PI;
+        }
+        update() {
+            this.x += this.vx + Math.sin(time * 0.015 + this.rot) * 0.2;
+            this.y += this.vy;
+            this.rot += 0.01;
+            this.life -= this.decay;
+            return this.life > 0;
+        }
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rot);
+            ctx.globalAlpha = this.alpha * this.life;
+            ctx.fillStyle = '#7A7068';
+            ctx.fillRect(0, 0, this.size, this.size * 2);
+            ctx.restore();
+        }
+    }
+
+    // ─── 메인 루프 ───
+    function animate() {
+        requestAnimationFrame(animate);
+        time++;
+
+        const prevLx = lx, prevLy = ly;
+        lx += (tlx - lx) * 0.035;
+        ly += (tly - ly) * 0.035;
+
+        // 빛이 바뀌었으면 다시 그리기
+        if (Math.abs(lx - prevLx) > 0.0005 || Math.abs(ly - prevLy) > 0.0005 || needsRedraw) {
+            render();
+            needsRedraw = false;
+        }
+
+        // 파티클
+        if (time % 12 === 0 && particles.length < 40) particles.push(new Particle());
+        for (let i = particles.length - 1; i >= 0; i--) {
+            if (!particles[i].update()) particles.splice(i, 1);
+            else particles[i].draw();
+        }
+    }
+
+    animate();
+}
+</script>
+</body>
+</html>
